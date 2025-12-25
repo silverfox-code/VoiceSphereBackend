@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voicesphere-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: voicesphere-backend
+  template:
+    metadata:
+      labels:
+        app: voicesphere-backend
+    spec:
+      containers:
+      - name: voicesphere-backend
+        image: voicesphere-backend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: source-code
+          mountPath: /usr/src/app
+      volumes:
+      - name: source-code
+        hostPath:
+          path: /Users/arun/Project/ChatterVox/VoiceSphereBackend
+          type: Directory
