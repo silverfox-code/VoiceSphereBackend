@@ -1,0 +1,12 @@
+target/
+.git/
+.gitignore
+k8s/
+migrations/
+logs/
+README.md
+task.md
+deployment.yaml
+service.yaml
+scylla-*.yaml
+*.log

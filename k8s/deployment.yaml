@@ -18,11 +18,20 @@ spec:
         imagePullPolicy: Never
         ports:
         - containerPort: 8080
+        env:
+        - name: DB_HOSTS
+          value: "scylla-0.scylla-service"
+        - name: DB_PORT
+          value: "9042"
+        - name: DB_KEYSPACE
+          value: "voicesphere"
+        - name: RUST_LOG
+          value: "info"
         volumeMounts:
         - name: source-code
           mountPath: /usr/src/app
       volumes:
       - name: source-code
         hostPath:
-          path: /Users/arun/Project/ChatterVox/VoiceSphereBackend
+          path: /run/desktop/mnt/host/f/Project/wakie-app/backend/VoiceSphereBackend
           type: Directory

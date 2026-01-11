@@ -18,5 +18,8 @@ COPY . .
 
 EXPOSE 8080
 
-# Use cargo run for development (recompiles on restart)
-CMD ["cargo", "run"]
+# Install cargo-watch for automatic recompilation
+RUN cargo install cargo-watch
+
+# Use cargo watch for development (automatically recompiles on file changes)
+CMD ["cargo", "watch", "-x", "run"]

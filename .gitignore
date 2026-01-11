@@ -1,1 +1,30 @@
+# Rust
 /target
+Cargo.lock
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+dist/
+build/

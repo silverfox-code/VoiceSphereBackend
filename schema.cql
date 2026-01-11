@@ -2,10 +2,26 @@ CREATE KEYSPACE IF NOT EXISTS voicesphere WITH REPLICATION = { 'class' : 'Simple
 
 CREATE TABLE IF NOT EXISTS voicesphere.users (
     id text PRIMARY KEY,
-    name text,
+
+    username text,
+    display_name text,
     email text,
-    password_hash text,
-    created_at timestamp
+    email_verified boolean,
+
+    bio text,
+    avatar_url text,
+    language text,
+    timezone text,
+
+    is_active boolean,
+    is_shadow_banned boolean,
+    report_count int,
+
+    session_version int,
+    last_login_at int,
+
+    created_at int,
+    updated_at int
 );
 
 CREATE TABLE IF NOT EXISTS voicesphere.topics (

@@ -16,6 +16,13 @@ spec:
       containers:
       - name: scylla
         image: scylladb/scylla:5.2
+        args:
+          - --smp
+          - "1"
+          - --memory
+          - "512M"
+          - --developer-mode
+          - "1"
         ports:
         - containerPort: 9042
           name: cql
