@@ -8,6 +8,7 @@ use crate::{handlers::user, User};
 // Query constants for production use
 const CREATE_USER_QUERY: &str = "INSERT INTO voicesphere.users (
     id,
+    device_id,
     username,
     display_name,
     email,
@@ -23,10 +24,11 @@ const CREATE_USER_QUERY: &str = "INSERT INTO voicesphere.users (
     last_login_at,
     created_at,
     updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)";
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 const GET_USER_QUERY: &str = "SELECT
     id,
+    device_id,
     username,
     display_name,
     email,
