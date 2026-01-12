@@ -93,24 +93,40 @@ pub async fn login(
     }
 }
 
-// pub async fn refresh(
-//     State(state): State<AppState>,
-//     Json(req): Json<LoginRequest>,
-// ) ->  Result<HttpResponse<LoginResponse>, AppError> {
+pub async fn refresh(
+    State(state): State<AppState>,
+    Json(req): Json<LoginRequest>,
+) -> Result<HttpResponse<LoginResponse>, AppError> {
+    let token = req.google_token;
+    let device_id = req.device_id;
 
-//     let token = req.google_token;
-//     let device_id = req.device_id;
+    log::info!("Attempting to refresh session for device: {}", device_id);
 
-//     log::info!("Refresh token");
+    // 1. Verify token signature and device ownership
+    let claims = verify_refresh_token(&token, &device_id, &state.jwt_secret)?;
 
-//     let user = verify_refresh_token(&token, &device_id, &state.jwt_secret)
-//             .map_err(|e| {
-//                 AppError::Unauthorized(format!("Failed to verify refresh token: {}", e))
-//             })?;
+    // 2. Fetch fresh user data from DB using ID from claims
+    let user = UserDB::get_user(&state.db, &claims.sub)
+        .await
+        .map_err(|e| AppError::DatabaseError(e))?
+        .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
-//     log::info!("User Authenticated {:?}", user);
-//     return Ok(HttpResponse::ok(LoginResponse::new(&user, token, user.exp)));
-// }
+    // 3. Validate session version (protects against revoked sessions)
+    if user.session_version != claims.session_version {
+         return Err(AppError::Unauthorized("Session version mismatch".to_string()));
+    }
+
+    // 4. Ensure user is still active
+    if !user.is_active {
+        return Err(AppError::Forbidden("Account is inactive".to_string()));
+    }
+
+    // 5. Generate a fresh token pair
+    let (new_token, expires_at) = generate_jwt_token(&user, &state.jwt_secret)?;
+
+    log::info!("Session successfully refreshed for user: {}", user.id);
+    Ok(HttpResponse::ok(LoginResponse::new(&user, new_token, expires_at)))
+}
 
 pub fn routes() -> Router<AppState> {
     Router::new()
