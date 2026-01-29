@@ -1,3 +1,4 @@
+use axum::middleware;
 // Main entry point
 use axum::{
     http::StatusCode,
@@ -5,6 +6,8 @@ use axum::{
     routing::get,
     Router,
 };
+
+use voicesphere_backend::middleware::auth_middleware;
 use voicesphere_backend::state::AppState;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
@@ -33,13 +36,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create shared application state
     let state = AppState { db: session, google_client_id: app_config.google_client_id, jwt_secret: app_config.jwt_secret };
 
-    // Create health check endpoint
-    let app = Router::new()
-        .nest("/api", handlers::routes())
+    let public_routes = Router::new()
         .route("/health", get(health_check))
+        .nest("/api", handlers::auth::routes());
+    
+    let protected_routes = Router::new()
+        .merge(handlers::profile::routes())
+        // .merge(handlers::user::routes())
+        // .merge(handlers::feed::routes())
+        // .merge(handlers::chat::routes())
+        .layer(middleware::from_fn(auth_middleware));
+    
+    let app = Router::new()
+        .merge(public_routes)
+        .nest("/api", protected_routes)
         .layer(CorsLayer::permissive())
-        // TODO: Add authentication middleware
-        // .layer(middleware::from_fn(AuthLayer))
         .fallback(handle_404)
         .with_state(state);
 

@@ -6,11 +6,26 @@
 //     routing::{delete, get, post},
 //     Router,
 // };
-// use crate::models::CreateFeedRequest;
+// use crate::{AppError, HttpResponse, models::feed};
 
-// pub async fn get_feed() -> impl IntoResponse {
+// pub struct FeedResponse{
+//     pub id: String,
+//     pub author_id: String,
+//     pub author_name: String,
+//     pub content: String,
+//     pub avatar_url: Option<Vec<String>>,
+//     pub created_at: i64,
+//     pub updated_at: i64,
+//     pub comments: i32,
+//     pub reactions: i32,
+// }
+
+// pub async fn get_feed() -> Result<HttpResponse<FeedResponse>, AppError> {
 //     // TODO: Implement get feed logic (home feed)
-//     (StatusCode::OK, Json(serde_json::json!({"message": "Get feed endpoint"})))
+//     Err(AppError::new(
+//         StatusCode::NOT_IMPLEMENTED,
+//         "Get feed not implemented".to_string(),
+//     ))
 // }
 
 // pub async fn get_user_feed(Path(user_id): Path<String>) -> impl IntoResponse {

@@ -7,6 +7,7 @@ use axum::{
     routing::post,
     Router,
 };
+use http::HeaderMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -96,6 +97,7 @@ pub async fn login(
 pub async fn refresh(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
+    // HeaderMap: HeaderMap<String>,
 ) -> Result<HttpResponse<LoginResponse>, AppError> {
     let token = req.google_token;
     let device_id = req.device_id;

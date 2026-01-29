@@ -26,11 +26,15 @@ CREATE TABLE IF NOT EXISTS voicesphere.users (
 );
 
 CREATE TABLE IF NOT EXISTS voicesphere.topics (
-    id uuid PRIMARY KEY,
-    title text,
-    description text,
-    author text,
-    created_at timestamp
+    id text PRIMARY KEY,
+    author_id text,
+    author_name text,
+    content text,
+    avatar_url text,
+    created_at timestamp,
+    updated_at timestamp,
+    comments int,
+    reactions int
 );
 
 CREATE TABLE IF NOT EXISTS voicesphere.comments (
