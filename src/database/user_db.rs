@@ -58,6 +58,8 @@ const DELETE_USER_QUERY: &str = "DELETE FROM voicesphere.users WHERE id = ?";
 
 pub struct UserDB;
 
+///Note : move prepred statements to a cache for better performance in production
+/// do't use unpage query for SELECT - not a good practice
 impl UserDB {
     pub async fn create_user(session: &Arc<Session>, user: &User) -> Result<bool, String> {
         log::info!("Creating user with id={}", user.id);

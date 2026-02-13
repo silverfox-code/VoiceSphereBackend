@@ -4,6 +4,7 @@ pub mod user;
 pub mod feed;
 pub mod chat;
 pub mod profile;
+pub mod reactions;
 
 use axum::Router;
 
