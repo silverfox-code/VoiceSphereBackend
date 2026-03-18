@@ -1,4 +1,4 @@
-use serde::{ Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum ErrorCode {
@@ -9,7 +9,7 @@ pub enum ErrorCode {
     Forbidden,
     AccountInactive,
     SessionExpired,
-    
+
     // Resources
     NotFound,
     UserNotFound,
@@ -17,24 +17,24 @@ pub enum ErrorCode {
     TopicNotFound,
 
     // Validation
-    ValidationError,    
+    ValidationError,
     InvalidInput,
     MissingField,
 
     // Conflicts
     AlreadyExists,
     UsernameTaken,
-    EmailTaken,    
+    EmailTaken,
     Conflict,
-    
+
     // Business Logic
     RoomFull,
     PermissionDenied,
     RateLimitExceeded,
-    
+
     // System
     DatabaseError,
-    InternalError,    
+    InternalError,
     ServiceUnavailable,
 }
 

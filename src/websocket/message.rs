@@ -14,10 +14,7 @@ pub enum WebSocketMessage {
     },
 
     #[serde(rename = "message_read")]
-    MessageRead {
-        message_id: String,
-        user_id: String,
-    },
+    MessageRead { message_id: String, user_id: String },
 
     // Status updates
     #[serde(rename = "user_online")]

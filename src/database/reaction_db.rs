@@ -39,7 +39,9 @@ impl ReactionDB {
     ) -> Result<(), String> {
         log::info!(
             "Adding reaction: user={} -> feed={} (author={})",
-            reaction.user_id, reaction.feed_id, reaction.author_id
+            reaction.user_id,
+            reaction.feed_id,
+            reaction.author_id
         );
 
         // Batch 1 (logged): insert the reaction row (IF NOT EXISTS for idempotency)
@@ -53,12 +55,15 @@ impl ReactionDB {
             .map_err(|e| format!("Failed to prepare insert batch: {}", e))?;
 
         session
-            .batch(&prepared_write, ((
-                reaction.feed_id,
-                reaction.user_id.clone(),
-                reaction.reaction_type,
-                reaction.reacted_at,
-            ),))
+            .batch(
+                &prepared_write,
+                ((
+                    reaction.feed_id,
+                    reaction.user_id.clone(),
+                    reaction.reaction_type,
+                    reaction.reacted_at,
+                ),),
+            )
             .await
             .map_err(|e| format!("Failed to insert reaction: {}", e))?;
 
@@ -74,17 +79,21 @@ impl ReactionDB {
             .map_err(|e| format!("Failed to prepare counter batch: {}", e))?;
 
         session
-            .batch(&prepared_counter, (
-                (reaction.feed_id,),
-                (reaction.user_id.as_str(),),
-                (reaction.author_id.as_str(),),
-            ))
+            .batch(
+                &prepared_counter,
+                (
+                    (reaction.feed_id,),
+                    (reaction.user_id.as_str(),),
+                    (reaction.author_id.as_str(),),
+                ),
+            )
             .await
             .map_err(|e| format!("Failed to update counters: {}", e))?;
 
         log::info!(
             "Reaction added: user={} -> feed={}",
-            reaction.user_id, reaction.feed_id
+            reaction.user_id,
+            reaction.feed_id
         );
         Ok(())
     }
@@ -95,7 +104,9 @@ impl ReactionDB {
     ) -> Result<(), String> {
         log::info!(
             "Removing reaction: user={} -> feed={} (author={})",
-            reaction.user_id, reaction.feed_id, reaction.author_id
+            reaction.user_id,
+            reaction.feed_id,
+            reaction.author_id
         );
 
         // Batch 1 (logged): delete the reaction row
@@ -109,7 +120,10 @@ impl ReactionDB {
             .map_err(|e| format!("Failed to prepare delete batch: {}", e))?;
 
         session
-            .batch(&prepared_write, ((reaction.feed_id, reaction.user_id.clone()),))
+            .batch(
+                &prepared_write,
+                ((reaction.feed_id, reaction.user_id.clone()),),
+            )
             .await
             .map_err(|e| format!("Failed to delete reaction: {}", e))?;
 
@@ -125,17 +139,21 @@ impl ReactionDB {
             .map_err(|e| format!("Failed to prepare counter batch: {}", e))?;
 
         session
-            .batch(&prepared_counter, (
-                (reaction.feed_id,),
-                (reaction.user_id.as_str(),),
-                (reaction.author_id.as_str(),),
-            ))
+            .batch(
+                &prepared_counter,
+                (
+                    (reaction.feed_id,),
+                    (reaction.user_id.as_str(),),
+                    (reaction.author_id.as_str(),),
+                ),
+            )
             .await
             .map_err(|e| format!("Failed to update counters: {}", e))?;
 
         log::info!(
             "Reaction removed: user={} -> feed={}",
-            reaction.user_id, reaction.feed_id
+            reaction.user_id,
+            reaction.feed_id
         );
         Ok(())
     }

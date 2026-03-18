@@ -4,9 +4,7 @@ use crate::{
     middleware::auth::UserContext,
     models::feed::FeedData,
     state::AppState,
-    AppError,
-    AppResponse,
-    HttpResponse,
+    AppError, AppResponse, HttpResponse,
 };
 use axum::{
     extract::{Extension, Json, Path, State},
@@ -14,8 +12,8 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use serde::{Deserialize, Serialize};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 // ============================================================================

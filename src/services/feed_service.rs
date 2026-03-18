@@ -6,7 +6,12 @@ impl FeedService {
         FeedService
     }
 
-    pub async fn create_feed(&self, user_id: &str, content: &str, media_urls: Option<Vec<String>>) -> Result<String, String> {
+    pub async fn create_feed(
+        &self,
+        user_id: &str,
+        content: &str,
+        media_urls: Option<Vec<String>>,
+    ) -> Result<String, String> {
         // TODO: Implement feed creation logic
         // - Generate feed ID
         // - Insert into database
@@ -14,14 +19,24 @@ impl FeedService {
         Ok("feed_id".to_string())
     }
 
-    pub async fn get_home_feed(&self, user_id: &str, limit: i32, offset: i32) -> Result<Vec<serde_json::Value>, String> {
+    pub async fn get_home_feed(
+        &self,
+        user_id: &str,
+        limit: i32,
+        offset: i32,
+    ) -> Result<Vec<serde_json::Value>, String> {
         // TODO: Implement home feed logic
         // - Get posts from following users
         // - Order by timestamp
         Ok(vec![])
     }
 
-    pub async fn get_user_feed(&self, user_id: &str, limit: i32, offset: i32) -> Result<Vec<serde_json::Value>, String> {
+    pub async fn get_user_feed(
+        &self,
+        user_id: &str,
+        limit: i32,
+        offset: i32,
+    ) -> Result<Vec<serde_json::Value>, String> {
         // TODO: Implement user feed logic
         // - Get posts by specific user
         // - Order by timestamp

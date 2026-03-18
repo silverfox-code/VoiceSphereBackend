@@ -71,7 +71,9 @@ impl IntoResponse for AppError {
                 msg,
                 None,
             ),
-            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized, msg, None),
+            AppError::Unauthorized(msg) => {
+                (StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized, msg, None)
+            }
             AppError::InvalidToken => (
                 StatusCode::UNAUTHORIZED,
                 ErrorCode::InvalidToken,

@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
 use scylla::{
-    DeserializeRow, client::session::Session, response::PagingState,
-    statement::{Consistency, batch::Batch},
+    client::session::Session,
+    response::PagingState,
+    statement::{batch::Batch, Consistency},
+    DeserializeRow,
 };
 use uuid::Uuid;
 
@@ -14,35 +16,35 @@ use crate::models::feed::FeedData;
 
 #[derive(Debug, DeserializeRow)]
 struct FeedRow {
-    pub feed_id:           Uuid,
-    pub author_id:         String,
-    pub author_name:       String,
+    pub feed_id: Uuid,
+    pub author_id: String,
+    pub author_name: String,
     pub author_avatar_url: Option<String>,
-    pub content:           String,
-    pub created_at:        i64,
-    pub updated_at:        i64,
-    pub is_active:         bool,
-    pub is_restricted:     bool,
+    pub content: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub is_active: bool,
+    pub is_restricted: bool,
 }
 
 #[derive(Debug, DeserializeRow)]
 struct FeedCounts {
-    pub comment_count:  i64,
+    pub comment_count: i64,
     pub reaction_count: i64,
 }
 
 fn to_feed_data(row: FeedRow) -> FeedData {
     FeedData {
-        id:                row.feed_id,
-        author:            row.author_id,
-        author_name:       row.author_name,
+        id: row.feed_id,
+        author: row.author_id,
+        author_name: row.author_name,
         author_avatar_url: row.author_avatar_url,
-        content:           row.content,
-        created_at:        row.created_at,
-        updated_at:        row.updated_at,
-        like_count:        0,
-        comment_count:     0,
-        is_liked_by_user:  false,
+        content: row.content,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        like_count: 0,
+        comment_count: 0,
+        is_liked_by_user: false,
     }
 }
 
@@ -133,31 +135,34 @@ impl FeedDB {
             .map_err(|e| format!("Failed to prepare create batch: {}", e))?;
 
         session
-            .batch(&prepared, (
+            .batch(
+                &prepared,
                 (
-                    feed.id,
-                    author_id,
-                    feed.author_name.as_str(),
-                    feed.author_avatar_url.as_deref(),
-                    feed.content.as_str(),
-                    feed.created_at,
-                    feed.updated_at,
-                    true,
-                    false,
+                    (
+                        feed.id,
+                        author_id,
+                        feed.author_name.as_str(),
+                        feed.author_avatar_url.as_deref(),
+                        feed.content.as_str(),
+                        feed.created_at,
+                        feed.updated_at,
+                        true,
+                        false,
+                    ),
+                    (
+                        bucket_id.as_str(),
+                        feed.id,
+                        author_id,
+                        feed.author_name.as_str(),
+                        feed.author_avatar_url.as_deref(),
+                        feed.content.as_str(),
+                        feed.created_at,
+                        feed.updated_at,
+                        true,
+                        false,
+                    ),
                 ),
-                (
-                    bucket_id.as_str(),
-                    feed.id,
-                    author_id,
-                    feed.author_name.as_str(),
-                    feed.author_avatar_url.as_deref(),
-                    feed.content.as_str(),
-                    feed.created_at,
-                    feed.updated_at,
-                    true,
-                    false,
-                ),
-            ))
+            )
             .await
             .map_err(|e| format!("Failed to execute create batch: {}", e))?;
 
@@ -246,7 +251,10 @@ impl FeedDB {
         let mut feeds: Vec<FeedData> = rows
             .rows::<FeedRow>()
             .map_err(|e| format!("Failed to deserialize feed rows: {}", e))?
-            .map(|r| r.map(to_feed_data).map_err(|e| format!("Failed to parse feed row: {}", e)))
+            .map(|r| {
+                r.map(to_feed_data)
+                    .map_err(|e| format!("Failed to parse feed row: {}", e))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         enrich_with_counts(session, &mut feeds, viewer_id).await?;
@@ -278,7 +286,11 @@ impl FeedDB {
             .rows::<FeedRow>()
             .map_err(|e| format!("Failed to deserialize feed row: {}", e))?;
 
-        match iter.next().transpose().map_err(|e| format!("Failed to parse feed row: {}", e))? {
+        match iter
+            .next()
+            .transpose()
+            .map_err(|e| format!("Failed to parse feed row: {}", e))?
+        {
             None => Ok(None),
             Some(row) => {
                 let mut feeds = vec![to_feed_data(row)];
@@ -308,10 +320,13 @@ impl FeedDB {
             .map_err(|e| format!("Failed to prepare update batch: {}", e))?;
 
         session
-            .batch(&prepared, (
-                (content, updated_at, author_id, feed_id),
-                (content, updated_at, bucket_id.as_str(), feed_id),
-            ))
+            .batch(
+                &prepared,
+                (
+                    (content, updated_at, author_id, feed_id),
+                    (content, updated_at, bucket_id.as_str(), feed_id),
+                ),
+            )
             .await
             .map_err(|e| format!("Failed to execute update batch: {}", e))?;
 
@@ -337,10 +352,10 @@ impl FeedDB {
             .map_err(|e| format!("Failed to prepare delete batch: {}", e))?;
 
         session
-            .batch(&prepared, (
-                (author_id, feed_id),
-                (bucket_id.as_str(), feed_id),
-            ))
+            .batch(
+                &prepared,
+                ((author_id, feed_id), (bucket_id.as_str(), feed_id)),
+            )
             .await
             .map_err(|e| format!("Failed to execute delete batch: {}", e))?;
 
@@ -392,11 +407,7 @@ async fn enrich_with_counts(
 
         // Liked by viewer
         if let Ok((res, _)) = session
-            .execute_single_page(
-                &reaction_stmt,
-                (feed.id, viewer_id),
-                PagingState::start(),
-            )
+            .execute_single_page(&reaction_stmt, (feed.id, viewer_id), PagingState::start())
             .await
         {
             if let Ok(rows) = res.into_rows_result() {

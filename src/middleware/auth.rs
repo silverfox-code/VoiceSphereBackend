@@ -14,7 +14,7 @@ use crate::AppError;
 /// JWT Claims structure - must match the one in authenticate.rs
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub sub: String,           // user_id
+    pub sub: String, // user_id
     pub device_id: String,
     pub session_version: i32,
     pub exp: i64,
@@ -28,14 +28,11 @@ pub struct UserContext {
     pub session_version: i32,
 }
 
-// for more security we can add check for session version in database , 
+// for more security we can add check for session version in database ,
 // version mismatch will happen if user is logged out form current session
 // but this iwll be extra overhead coz on refresh token we are checking session version
 // so we can skip this check for now
-pub async fn auth_middleware(
-    mut req: Request,
-    next: Next,
-) -> Result<Response, AppError> {
+pub async fn auth_middleware(mut req: Request, next: Next) -> Result<Response, AppError> {
     let auth_header = req
         .headers()
         .get(http::header::AUTHORIZATION)
@@ -46,8 +43,7 @@ pub async fn auth_middleware(
         .strip_prefix("Bearer ")
         .ok_or_else(|| AppError::Unauthorized("Invalid Authorization header format".to_string()))?;
 
-    let jwt_secret = std::env::var("JWT_SECRET")
-        .unwrap_or_else(|_| "your-secret-key".to_string());
+    let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "your-secret-key".to_string());
 
     let claims = verify_token(token, &jwt_secret)?;
 
@@ -83,21 +79,21 @@ fn verify_token(token: &str, secret: &str) -> Result<Claims, AppError> {
 
 // Optional: Middleware variant that also checks session version against database
 // Use this if you want to invalidate tokens when user logs out from another device
-// 
+//
 // pub async fn auth_middleware_with_db_check(
 //     State(app_state): State<AppState>,
 //     mut req: Request,
 //     next: Next,
 // ) -> Result<Response, AppError> {
 //     // ... extract and verify token (same as above) ...
-//     
+//
 //     // Fetch user from database
 //     let user = app_state.db.get_user(&claims.sub).await?;
-//     
+//
 //     // Check if session version matches
 //     if user.session_version != claims.session_version {
 //         return Err(AppError::Unauthorized("Session invalidated".to_string()));
 //     }
-//     
+//
 //     // ... continue with request ...
 // }

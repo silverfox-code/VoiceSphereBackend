@@ -6,7 +6,12 @@ impl UserService {
         UserService
     }
 
-    pub async fn create_user(&self, _username: &str, _email: &str, _password: &str) -> Result<String, String> {
+    pub async fn create_user(
+        &self,
+        _username: &str,
+        _email: &str,
+        _password: &str,
+    ) -> Result<String, String> {
         // TODO: Implement user creation logic
         // - Hash password
         // - Insert into database
@@ -19,7 +24,12 @@ impl UserService {
         Ok(serde_json::json!({"id": user_id}))
     }
 
-    pub async fn update_user(&self, _user_id: &str, _username: Option<&str>, _bio: Option<&str>) -> Result<bool, String> {
+    pub async fn update_user(
+        &self,
+        _user_id: &str,
+        _username: Option<&str>,
+        _bio: Option<&str>,
+    ) -> Result<bool, String> {
         // TODO: Implement update user logic
         Ok(true)
     }

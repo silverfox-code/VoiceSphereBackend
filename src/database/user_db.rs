@@ -93,18 +93,19 @@ impl UserDB {
             .execute_unpaged(&prepared_query, (id,))
             .await
             .map_err(|e| format!("Failed to parse user data: {}", e))?;
- 
+
         let row_result = rows
-            .into_rows_result()     
+            .into_rows_result()
             .map_err(|e| format!("Failed to convert rows result: {}", e))?;
 
-        let mut users_rows = row_result.rows::<User>()
+        let mut users_rows = row_result
+            .rows::<User>()
             .map_err(|e| format!("Failed to map rows to User struct: {}", e))?;
 
         // Get the first element from the iterator without looping
         match users_rows.next().transpose() {
             Ok(Some(user)) => {
-                log::debug!("User found: id={}", id);   
+                log::debug!("User found: id={}", id);
                 Ok(Some(user))
             }
             Ok(None) => {
@@ -123,7 +124,11 @@ impl UserDB {
         self::UserDB::get_user(session, id).await
     }
 
-    pub async fn update_last_login(session: &Arc<Session>, id: &str, last_login_at: chrono::DateTime<chrono::Utc>) -> Result<bool, String> {
+    pub async fn update_last_login(
+        session: &Arc<Session>,
+        id: &str,
+        last_login_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, String> {
         log::info!("Updating last login time for user id={}", id);
         let prepare_query = session
             .prepare(UPDATE_LAST_LOGIN_QUERY)

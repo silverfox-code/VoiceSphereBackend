@@ -1,7 +1,7 @@
-use crate::{AppError, response::HttpResponse};
 use crate::database::user_db::UserDB;
-use crate::utils::authenticate::{verify_google_token, verify_refresh_token, generate_jwt_token};
-use crate::{state::AppState,  User};
+use crate::utils::authenticate::{generate_jwt_token, verify_google_token, verify_refresh_token};
+use crate::{response::HttpResponse, AppError};
+use crate::{state::AppState, User};
 use axum::{
     extract::{Json, State},
     routing::post,
@@ -17,7 +17,7 @@ pub struct LoginRequest {
 }
 
 #[derive(Debug, Serialize)]
-pub struct LoginResponse{
+pub struct LoginResponse {
     pub id: String,
     pub device_id: String,
     pub display_name: String,
@@ -36,7 +36,7 @@ pub struct LoginResponse{
     pub session_version: i32,
     pub token: String,
 
-    pub expires_at: i64,   
+    pub expires_at: i64,
 }
 
 impl LoginResponse {
@@ -58,7 +58,7 @@ impl LoginResponse {
     }
 }
 
-pub async fn login( 
+pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> Result<HttpResponse<LoginResponse>, AppError> {
@@ -66,22 +66,24 @@ pub async fn login(
     let device_id = req.device_id;
 
     let claims = verify_google_token(&token, &state.google_client_id)
-            .await
-            .map_err(|e| {
-                AppError::Unauthorized(format!("Failed to verify Google token: {}", e))
-            })? ;
+        .await
+        .map_err(|e| AppError::Unauthorized(format!("Failed to verify Google token: {}", e)))?;
 
     log::info!("User Authenticated {:?}", claims);
 
     //check if user exists in DB, if not create new user
-     match UserDB::user_exists(&state.db, &claims.sub).await? {
+    match UserDB::user_exists(&state.db, &claims.sub).await? {
         Some(existing_user) => {
             log::info!("Existing user logged in with id: {}", claims.sub);
             let now = chrono::Utc::now();
             UserDB::update_last_login(&state.db, &claims.sub, now).await?;
 
             let (token, expires_at) = generate_jwt_token(&existing_user, &state.jwt_secret)?;
-            return Ok(HttpResponse::ok(LoginResponse::new(&existing_user, token, expires_at)));
+            return Ok(HttpResponse::ok(LoginResponse::new(
+                &existing_user,
+                token,
+                expires_at,
+            )));
         }
         None => {
             log::info!("New user created with id: {}", claims.sub);
@@ -89,7 +91,9 @@ pub async fn login(
             UserDB::create_user(&state.db, &new_user).await?;
 
             let (token, expires_at) = generate_jwt_token(&new_user, &state.jwt_secret)?;
-            return Ok(HttpResponse::ok(LoginResponse::new(&new_user, token, expires_at)));
+            return Ok(HttpResponse::ok(LoginResponse::new(
+                &new_user, token, expires_at,
+            )));
         }
     }
 }
@@ -115,7 +119,9 @@ pub async fn refresh(
 
     // 3. Validate session version (protects against revoked sessions)
     if user.session_version != claims.session_version {
-         return Err(AppError::Unauthorized("Session version mismatch".to_string()));
+        return Err(AppError::Unauthorized(
+            "Session version mismatch".to_string(),
+        ));
     }
 
     // 4. Ensure user is still active
@@ -127,7 +133,9 @@ pub async fn refresh(
     let (new_token, expires_at) = generate_jwt_token(&user, &state.jwt_secret)?;
 
     log::info!("Session successfully refreshed for user: {}", user.id);
-    Ok(HttpResponse::ok(LoginResponse::new(&user, new_token, expires_at)))
+    Ok(HttpResponse::ok(LoginResponse::new(
+        &user, new_token, expires_at,
+    )))
 }
 
 pub fn routes() -> Router<AppState> {

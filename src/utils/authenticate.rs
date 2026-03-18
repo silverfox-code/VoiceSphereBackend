@@ -1,5 +1,8 @@
 use chrono::{Duration, Utc};
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation, decode, decode_header, encode, errors::Error, jwk::JwkSet};
+use jsonwebtoken::{
+    decode, decode_header, encode, errors::Error, jwk::JwkSet, Algorithm, DecodingKey, EncodingKey,
+    Validation,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{AppError, User};
@@ -62,7 +65,7 @@ pub struct Claims {
     pub sub: String,
     pub device_id: String,
     pub session_version: i32,
-    pub exp: i64
+    pub exp: i64,
 }
 
 pub fn generate_jwt_token(user: &User, secret: &str) -> Result<(String, i64), Error> {
@@ -85,13 +88,17 @@ pub fn generate_jwt_token(user: &User, secret: &str) -> Result<(String, i64), Er
     Ok((token, expiration))
 }
 
-pub fn verify_refresh_token(token: &str, device_id: &str, secret: &str) -> Result<Claims, AppError> {
+pub fn verify_refresh_token(
+    token: &str,
+    device_id: &str,
+    secret: &str,
+) -> Result<Claims, AppError> {
     let decoding_key = DecodingKey::from_secret(secret.as_bytes());
     let validation = Validation::default();
-    
+
     let token_data = decode::<Claims>(token, &decoding_key, &validation)
-        .map_err(|e| AppError::Unauthorized(format!("Failed to decode token: {}", e)))?;   
-    
+        .map_err(|e| AppError::Unauthorized(format!("Failed to decode token: {}", e)))?;
+
     let claims = token_data.claims;
 
     if claims.device_id != device_id {
@@ -100,7 +107,7 @@ pub fn verify_refresh_token(token: &str, device_id: &str, secret: &str) -> Resul
 
     if claims.exp < Utc::now().timestamp_millis() {
         return Err(AppError::Unauthorized("Token expired".to_string()));
-    } 
+    }
 
     Ok(claims)
 }

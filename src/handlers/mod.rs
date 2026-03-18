@@ -1,11 +1,11 @@
 // API Handlers/Routes
 pub mod auth;
-pub mod user;
-pub mod feed;
 pub mod chat;
+pub mod comments;
+pub mod feed;
 pub mod profile;
 pub mod reactions;
-pub mod comments;
+pub mod user;
 
 use axum::Router;
 

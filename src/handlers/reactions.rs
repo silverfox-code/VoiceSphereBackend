@@ -1,11 +1,7 @@
 // Reactions handlers
 use crate::{
-    database::reaction_db::ReactionDB,
-    middleware::auth::UserContext,
-    models::reaction::ReactionModel,
-    state::AppState,
-    AppError,
-    HttpResponse,
+    database::reaction_db::ReactionDB, middleware::auth::UserContext,
+    models::reaction::ReactionModel, state::AppState, AppError, HttpResponse,
 };
 use axum::{
     extract::{Extension, Json, Path, State},
@@ -42,7 +38,9 @@ pub struct ReactionResponse {
     pub reacted_at: i64,
 }
 
-fn default_reaction_type() -> i32 { 1 }
+fn default_reaction_type() -> i32 {
+    1
+}
 
 // ============================================================================
 // Handler Functions
@@ -57,12 +55,15 @@ pub async fn add_reaction(
 ) -> Result<HttpResponse<ReactionResponse>, AppError> {
     log::info!(
         "User {} adding reaction to feed {} (author: {})",
-        user_ctx.user_id, req.feed_id, req.author_id
+        user_ctx.user_id,
+        req.feed_id,
+        req.author_id
     );
 
     if req.reaction_type < 1 || req.reaction_type > 10 {
         return Err(AppError::ValidationError(
-            "Invalid reaction type. Must be between 1 and 10".to_string(), None,
+            "Invalid reaction type. Must be between 1 and 10".to_string(),
+            None,
         ));
     }
 
@@ -111,7 +112,9 @@ pub async fn remove_reaction(
 ) -> Result<HttpResponse<()>, AppError> {
     log::info!(
         "User {} removing reaction from feed {} (author: {})",
-        user_ctx.user_id, feed_id, req.author_id
+        user_ctx.user_id,
+        feed_id,
+        req.author_id
     );
 
     let feed_id_uuid = Uuid::parse_str(&feed_id)
@@ -141,11 +144,15 @@ pub async fn toggle_reaction(
 ) -> Result<HttpResponse<serde_json::Value>, AppError> {
     log::info!(
         "User {} toggling reaction on feed {} (author: {})",
-        user_ctx.user_id, req.feed_id, req.author_id
+        user_ctx.user_id,
+        req.feed_id,
+        req.author_id
     );
 
     // TODO: Check if reaction exists, remove if so, add if not
-    Err(AppError::InternalError("Toggle reaction not yet implemented".to_string()))
+    Err(AppError::InternalError(
+        "Toggle reaction not yet implemented".to_string(),
+    ))
 }
 
 // ============================================================================

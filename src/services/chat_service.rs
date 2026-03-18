@@ -6,7 +6,13 @@ impl ChatService {
         ChatService
     }
 
-    pub async fn send_message(&self, sender_id: &str, receiver_id: &str, content: &str, media_url: Option<&str>) -> Result<String, String> {
+    pub async fn send_message(
+        &self,
+        sender_id: &str,
+        receiver_id: &str,
+        content: &str,
+        media_url: Option<&str>,
+    ) -> Result<String, String> {
         // TODO: Implement send message logic
         // - Generate message ID
         // - Insert into database
@@ -15,7 +21,13 @@ impl ChatService {
         Ok("message_id".to_string())
     }
 
-    pub async fn get_conversation(&self, user_1_id: &str, user_2_id: &str, limit: i32, offset: i32) -> Result<Vec<serde_json::Value>, String> {
+    pub async fn get_conversation(
+        &self,
+        user_1_id: &str,
+        user_2_id: &str,
+        limit: i32,
+        offset: i32,
+    ) -> Result<Vec<serde_json::Value>, String> {
         // TODO: Implement get conversation logic
         // - Fetch messages between two users
         // - Order by timestamp

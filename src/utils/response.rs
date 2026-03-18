@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde::{ Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::ErrorCode;
 
