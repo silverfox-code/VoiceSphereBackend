@@ -2,11 +2,13 @@ use std::sync::Arc;
 
 use scylla::{
     client::session::Session,
+    response::PagingState,
     statement::{
         batch::{Batch, BatchType},
         Consistency,
     },
 };
+use uuid::Uuid;
 
 use crate::models::reaction::ReactionModel;
 
@@ -14,6 +16,8 @@ const INSERT_REACTION_QUERY: &str =
     "INSERT INTO voicesphere.reactions (feed_id, user_id, reaction_type, reacted_at) VALUES (?, ?, ?, ?) IF NOT EXISTS";
 const DELETE_REACTION_QUERY: &str =
     "DELETE FROM voicesphere.reactions WHERE feed_id = ? AND user_id = ?";
+const CHECK_REACTION_QUERY: &str =
+    "SELECT user_id FROM voicesphere.reactions WHERE feed_id = ? AND user_id = ?";
 
 // COUNTER updates (feed_counts + user_stats) — must be in a counter batch, separate from regular writes
 const INCREMENT_REACTION_COUNT_QUERY: &str =
@@ -156,5 +160,28 @@ impl ReactionDB {
             reaction.feed_id
         );
         Ok(())
+    }
+
+    /// Returns true if the user has already reacted to this feed.
+    pub async fn reaction_exists(
+        session: &Arc<Session>,
+        feed_id: Uuid,
+        user_id: &str,
+    ) -> Result<bool, String> {
+        let stmt = session
+            .prepare(CHECK_REACTION_QUERY)
+            .await
+            .map_err(|e| format!("Failed to prepare check reaction query: {}", e))?;
+
+        let (res, _) = session
+            .execute_single_page(&stmt, (feed_id, user_id), PagingState::start())
+            .await
+            .map_err(|e| format!("Failed to execute check reaction query: {}", e))?;
+
+        let rows = res
+            .into_rows_result()
+            .map_err(|e| format!("Failed to read reaction check result: {}", e))?;
+
+        Ok(rows.rows_num() > 0)
     }
 }

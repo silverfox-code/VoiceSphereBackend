@@ -38,6 +38,13 @@ pub struct ReactionResponse {
     pub reacted_at: i64,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ToggleReactionResponse {
+    pub feed_id: String,
+    pub user_id: String,
+    pub liked: bool,
+}
+
 fn default_reaction_type() -> i32 {
     1
 }
@@ -138,10 +145,10 @@ pub async fn remove_reaction(
 /// Toggle a reaction (add if not exists, remove if exists)
 /// POST /api/reactions/toggle
 pub async fn toggle_reaction(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Extension(user_ctx): Extension<UserContext>,
     Json(req): Json<AddReactionRequest>,
-) -> Result<HttpResponse<serde_json::Value>, AppError> {
+) -> Result<HttpResponse<ToggleReactionResponse>, AppError> {
     log::info!(
         "User {} toggling reaction on feed {} (author: {})",
         user_ctx.user_id,
@@ -149,10 +156,52 @@ pub async fn toggle_reaction(
         req.author_id
     );
 
-    // TODO: Check if reaction exists, remove if so, add if not
-    Err(AppError::InternalError(
-        "Toggle reaction not yet implemented".to_string(),
-    ))
+    if req.reaction_type < 1 || req.reaction_type > 5 {
+        return Err(AppError::ValidationError(
+            "Invalid reaction type. Must be between 1 and 5".to_string(),
+            None,
+        ));
+    }
+
+    let feed_id = Uuid::parse_str(&req.feed_id)
+        .map_err(|_| AppError::ValidationError("Invalid feed_id".to_string(), None))?;
+
+    let already_liked = ReactionDB::reaction_exists(&state.db, feed_id, &user_ctx.user_id)
+        .await
+        .map_err(|e| AppError::DatabaseError(format!("Failed to check reaction: {}", e)))?;
+
+    let reaction_data = ReactionModel {
+        feed_id,
+        user_id: user_ctx.user_id.clone(),
+        author_id: req.author_id.clone(),
+        reaction_type: req.reaction_type,
+        reacted_at: Utc::now().timestamp_millis(),
+    };
+
+    let liked = if already_liked {
+        ReactionDB::remove_reaction(&state.db, reaction_data)
+            .await
+            .map_err(|e| AppError::DatabaseError(format!("Failed to remove reaction: {}", e)))?;
+        false
+    } else {
+        ReactionDB::add_reaction(&state.db, reaction_data)
+            .await
+            .map_err(|e| AppError::DatabaseError(format!("Failed to add reaction: {}", e)))?;
+        true
+    };
+
+    log::info!(
+        "Reaction toggled: user={} -> feed={}, liked={}",
+        user_ctx.user_id,
+        req.feed_id,
+        liked
+    );
+
+    Ok(HttpResponse::ok(ToggleReactionResponse {
+        feed_id: req.feed_id,
+        user_id: user_ctx.user_id,
+        liked,
+    }))
 }
 
 // ============================================================================
