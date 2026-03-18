@@ -24,31 +24,3 @@ CREATE TABLE IF NOT EXISTS voicesphere.users (
     created_at timestamp,
     updated_at timestamp
 );
-
-CREATE TABLE IF NOT EXISTS voicesphere.topics (
-    id text PRIMARY KEY,
-    author_id text,
-    author_name text,
-    content text,
-    avatar_url text,
-    created_at timestamp,
-    updated_at timestamp,
-    comments int,
-    reactions int
-);
-
-CREATE TABLE IF NOT EXISTS voicesphere.comments (
-    topic_id uuid,
-    created_at timestamp,
-    id uuid,
-    user_id text,
-    content text,
-    PRIMARY KEY (topic_id, created_at, id)
-) WITH CLUSTERING ORDER BY (created_at ASC);
-
-CREATE TABLE IF NOT EXISTS voicesphere.reactions (
-    comment_id uuid,
-    user_id text,
-    emoji text,
-    PRIMARY KEY (comment_id, user_id)
-);

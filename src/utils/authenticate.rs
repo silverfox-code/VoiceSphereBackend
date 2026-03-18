@@ -69,7 +69,7 @@ pub fn generate_jwt_token(user: &User, secret: &str) -> Result<(String, i64), Er
     let expiration = Utc::now()
         .checked_add_signed(Duration::days(30))
         .expect("valid timestamp")
-        .timestamp();
+        .timestamp_millis();
 
     let claims = Claims {
         sub: user.id.clone(),
@@ -98,7 +98,7 @@ pub fn verify_refresh_token(token: &str, device_id: &str, secret: &str) -> Resul
         return Err(AppError::Unauthorized("Device ID mismatch".to_string()));
     }
 
-    if claims.exp < Utc::now().timestamp() {
+    if claims.exp < Utc::now().timestamp_millis() {
         return Err(AppError::Unauthorized("Token expired".to_string()));
     } 
 

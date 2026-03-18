@@ -73,7 +73,7 @@ fn verify_token(token: &str, secret: &str) -> Result<Claims, AppError> {
 
     // Check if token is expired (jsonwebtoken crate does this automatically,
     // but we can add additional checks here if needed)
-    let now = chrono::Utc::now().timestamp();
+    let now = chrono::Utc::now().timestamp_millis();
     if claims.exp < now {
         return Err(AppError::Unauthorized("Token expired".to_string()));
     }

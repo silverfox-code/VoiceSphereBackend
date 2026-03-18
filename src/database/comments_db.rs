@@ -1,24 +1,30 @@
 use std::sync::Arc;
 
-use scylla::{ client::session::Session, statement::{Consistency, batch::Batch}};
+use scylla::{
+    client::session::Session,
+    statement::{
+        batch::{Batch, BatchType},
+        Consistency,
+    },
+};
 
 use crate::models::comment::Comment;
 
-const INCREMENT_COMMENT_COUNT_QUERY: &str =
-    "UPDATE voicesphere.feeds SET comment_count = comment_count + 1 WHERE feed_id = ?";
-const DECREMENT_COMMENT_COUNT_QUERY: &str =
-    "UPDATE voicesphere.feeds SET comment_count = comment_count - 1 WHERE feed_id = ?";
+const INSERT_COMMENT_QUERY: &str = "
+    INSERT INTO voicesphere.comments
+        (feed_id, comment_id, user_id, comment, commented_at, parent_comment_id, parent_user_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-const INCREMENT_COMMENT_COUNT_GLOBAL_FEEDS: &str =
-    "UPDATE voicesphere.global_feeds SET comment_count = comment_count + 1 WHERE feed_id = ?";
-const DECREMENT_COMMENT_COUNT_GLOBAL_FEEDS: &str =
-    "UPDATE voicesphere.global_feeds SET comment_count = comment_count - 1 WHERE feed_id = ?";
-
-const INSERT_COMMENT_QUERY: &str = "INSERT INTO voicesphere.comments (feed_id, comment_id, user_id, comment, commented_at, parent_comment_id, parent_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+// comment_id is the clustering key — feed_id + comment_id is the full primary key
 const DELETE_COMMENT_QUERY: &str =
     "DELETE FROM voicesphere.comments WHERE feed_id = ? AND comment_id = ?";
 
-// User stats updates
+// COUNTER updates (feed_counts + user_stats) — must be in a counter batch, separate from regular writes
+const INCREMENT_COMMENT_COUNT_QUERY: &str =
+    "UPDATE voicesphere.feed_counts SET comment_count = comment_count + 1 WHERE feed_id = ?";
+const DECREMENT_COMMENT_COUNT_QUERY: &str =
+    "UPDATE voicesphere.feed_counts SET comment_count = comment_count - 1 WHERE feed_id = ?";
+
 const INCREMENT_COMMENTS_GIVEN_QUERY: &str =
     "UPDATE voicesphere.user_stats SET comments_given = comments_given + 1 WHERE user_id = ?";
 const DECREMENT_COMMENTS_GIVEN_QUERY: &str =
@@ -31,108 +37,108 @@ const DECREMENT_COMMENTS_RECEIVED_QUERY: &str =
 pub struct CommentsDB;
 
 impl CommentsDB {
-    /// Add a comment to a feed and increment comment counters
-    pub async fn add_comment(
-        session: &Arc<Session>,
-        comment_data: Comment,
-    ) -> Result<bool, String> {
+    pub async fn add_comment(session: &Arc<Session>, comment: Comment) -> Result<(), String> {
         log::info!(
-            "Adding comment: user={} -> feed={} (author={})",
-            comment_data.user_id,
-            comment_data.feed_id,
-            comment_data.author_id
+            "Adding comment: user={} -> feed={}, comment_id={}",
+            comment.user_id, comment.feed_id, comment.comment_id
         );
 
-        let mut batch: Batch = Default::default();
-        batch.append_statement(INCREMENT_COMMENT_COUNT_QUERY);
-        batch.append_statement(INCREMENT_COMMENT_COUNT_GLOBAL_FEEDS);
-        batch.append_statement(INSERT_COMMENT_QUERY);
-        batch.append_statement(INCREMENT_COMMENTS_GIVEN_QUERY);
-        batch.append_statement(INCREMENT_COMMENTS_RECEIVED_QUERY);
+        // Batch 1 (logged): insert the comment row
+        let mut write_batch: Batch = Default::default();
+        write_batch.append_statement(INSERT_COMMENT_QUERY);
+        write_batch.set_consistency(Consistency::One);
 
-        batch.set_consistency(Consistency::One);
-
-        let prepared_batch = session
-            .prepare_batch(&batch)
+        let prepared_write = session
+            .prepare_batch(&write_batch)
             .await
-            .map_err(|e| format!("Failed to prepare batch: {}", e))?;
-
-        let batch_values = (
-            (comment_data.feed_id.clone(),),
-            (comment_data.feed_id.clone(),),
-            (
-                comment_data.feed_id.clone(),
-                comment_data.comment_id.clone(),
-                comment_data.user_id.clone(),
-                comment_data.comment.clone(),
-                comment_data.commented_at,
-                comment_data.parent_comment_id.clone(),
-                comment_data.parent_user_id.clone(),
-            ),
-            (comment_data.user_id.clone(),),       // comments_given for commenter
-            (comment_data.author_id.clone(),),     // comments_received for feed author
-        );
+            .map_err(|e| format!("Failed to prepare insert batch: {}", e))?;
 
         session
-            .batch(&prepared_batch, batch_values)
+            .batch(&prepared_write, ((
+                comment.feed_id,
+                comment.comment_id,
+                comment.user_id.clone(),
+                comment.comment.clone(),
+                comment.commented_at,
+                comment.parent_comment_id,
+                comment.parent_user_id.clone(),
+            ),))
             .await
-            .map_err(|e| format!("Error occurred while adding comment: {}", e))?;
+            .map_err(|e| format!("Failed to insert comment: {}", e))?;
+
+        // Batch 2 (counter): feed_counts + user_stats
+        // All three are COUNTER updates so they can share a counter batch
+        let mut counter_batch = Batch::new(BatchType::Counter);
+        counter_batch.append_statement(INCREMENT_COMMENT_COUNT_QUERY);
+        counter_batch.append_statement(INCREMENT_COMMENTS_GIVEN_QUERY);
+        counter_batch.append_statement(INCREMENT_COMMENTS_RECEIVED_QUERY);
+
+        let prepared_counter = session
+            .prepare_batch(&counter_batch)
+            .await
+            .map_err(|e| format!("Failed to prepare counter batch: {}", e))?;
+
+        session
+            .batch(&prepared_counter, (
+                (comment.feed_id,),
+                (comment.user_id.as_str(),),
+                (comment.author_id.as_str(),),
+            ))
+            .await
+            .map_err(|e| format!("Failed to update counters: {}", e))?;
 
         log::info!(
-            "Comment added successfully: user={} -> feed={}, comment_id={}",
-            comment_data.user_id,
-            comment_data.feed_id,
-            comment_data.comment_id
+            "Comment added: user={} -> feed={}, comment_id={}",
+            comment.user_id, comment.feed_id, comment.comment_id
         );
-        Ok(true)
+        Ok(())
     }
 
-    /// Remove a comment from a feed and decrement comment counters
-    pub async fn remove_comment(
-        session: &Arc<Session>,
-        comment_data: Comment,
-    ) -> Result<bool, String> {
+    pub async fn remove_comment(session: &Arc<Session>, comment: Comment) -> Result<(), String> {
         log::info!(
-            "Removing comment: user={} -> feed={} (author={}), comment_id={}",
-            comment_data.user_id,
-            comment_data.feed_id,
-            comment_data.author_id,
-            comment_data.comment_id
+            "Removing comment: user={} -> feed={}, comment_id={}",
+            comment.user_id, comment.feed_id, comment.comment_id
         );
 
-        let mut batch: Batch = Default::default();
-        batch.append_statement(DECREMENT_COMMENT_COUNT_QUERY);
-        batch.append_statement(DECREMENT_COMMENT_COUNT_GLOBAL_FEEDS);
-        batch.append_statement(DELETE_COMMENT_QUERY);
-        batch.append_statement(DECREMENT_COMMENTS_GIVEN_QUERY);
-        batch.append_statement(DECREMENT_COMMENTS_RECEIVED_QUERY);
+        // Batch 1 (logged): delete the comment row
+        let mut write_batch: Batch = Default::default();
+        write_batch.append_statement(DELETE_COMMENT_QUERY);
+        write_batch.set_consistency(Consistency::One);
 
-        batch.set_consistency(Consistency::One);
-
-        let prepared_batch = session
-            .prepare_batch(&batch)
+        let prepared_write = session
+            .prepare_batch(&write_batch)
             .await
-            .map_err(|e| format!("Failed to prepare batch: {}", e))?;
-
-        let batch_values = (
-            (comment_data.feed_id.clone(),),
-            (comment_data.feed_id.clone(),),
-            (comment_data.feed_id.clone(), comment_data.comment_id.clone()),
-            (comment_data.user_id.clone(),),       // comments_given for commenter
-            (comment_data.author_id.clone(),),     // comments_received for feed author
-        );
+            .map_err(|e| format!("Failed to prepare delete batch: {}", e))?;
 
         session
-            .batch(&prepared_batch, batch_values)
+            .batch(&prepared_write, ((comment.feed_id, comment.comment_id),))
             .await
-            .map_err(|e| format!("Error occurred while removing comment: {}", e))?;
+            .map_err(|e| format!("Failed to delete comment: {}", e))?;
+
+        // Batch 2 (counter): feed_counts + user_stats
+        let mut counter_batch = Batch::new(BatchType::Counter);
+        counter_batch.append_statement(DECREMENT_COMMENT_COUNT_QUERY);
+        counter_batch.append_statement(DECREMENT_COMMENTS_GIVEN_QUERY);
+        counter_batch.append_statement(DECREMENT_COMMENTS_RECEIVED_QUERY);
+
+        let prepared_counter = session
+            .prepare_batch(&counter_batch)
+            .await
+            .map_err(|e| format!("Failed to prepare counter batch: {}", e))?;
+
+        session
+            .batch(&prepared_counter, (
+                (comment.feed_id,),
+                (comment.user_id.as_str(),),
+                (comment.author_id.as_str(),),
+            ))
+            .await
+            .map_err(|e| format!("Failed to update counters: {}", e))?;
 
         log::info!(
-            "Comment removed successfully: user={} -> feed={}, comment_id={}",
-            comment_data.user_id,
-            comment_data.feed_id,
-            comment_data.comment_id
+            "Comment removed: user={} -> feed={}, comment_id={}",
+            comment.user_id, comment.feed_id, comment.comment_id
         );
-        Ok(true)
+        Ok(())
     }
 }

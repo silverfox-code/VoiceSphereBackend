@@ -1,23 +1,26 @@
 use std::sync::Arc;
 
-use scylla::{  client::session::Session, statement::{Consistency, batch::Batch}};
+use scylla::{
+    client::session::Session,
+    statement::{
+        batch::{Batch, BatchType},
+        Consistency,
+    },
+};
+
 use crate::handlers::reactions::ReactionModel;
 
-const INCREMENT_LIKES_QUERY: &str =
-    "UPDATE voicesphere.feeds SET reaction_count = reaction_count + 1 WHERE feed_id = ?";
-const DECREMENT_LIKES_QUERY: &str =
-    "UPDATE voicesphere.feeds SET reaction_count = reaction_count - 1 WHERE feed_id = ?";
-
-const INCREMENT_LIKES_QUERY_GLOBAL_FEEDS: &str =
-    "UPDATE voicesphere.global_feeds SET reaction_count = reaction_count + 1 WHERE feed_id = ?";
-const DECREMENT_LIKES_QUERY_GLOBAL_FEEDS: &str =
-    "UPDATE voicesphere.global_feeds SET reaction_count = reaction_count - 1 WHERE feed_id = ?";
-
-const INSERT_REACTION_QUERY: &str = "INSERT INTO voicesphere.reactions (feed_id, user_id, reaction_type, reacted_at) VALUES (?, ?, ?, ?) IF NOT EXISTS";
+const INSERT_REACTION_QUERY: &str =
+    "INSERT INTO voicesphere.reactions (feed_id, user_id, reaction_type, reacted_at) VALUES (?, ?, ?, ?) IF NOT EXISTS";
 const DELETE_REACTION_QUERY: &str =
     "DELETE FROM voicesphere.reactions WHERE feed_id = ? AND user_id = ?";
 
-// User stats updates
+// COUNTER updates (feed_counts + user_stats) — must be in a counter batch, separate from regular writes
+const INCREMENT_REACTION_COUNT_QUERY: &str =
+    "UPDATE voicesphere.feed_counts SET reaction_count = reaction_count + 1 WHERE feed_id = ?";
+const DECREMENT_REACTION_COUNT_QUERY: &str =
+    "UPDATE voicesphere.feed_counts SET reaction_count = reaction_count - 1 WHERE feed_id = ?";
+
 const INCREMENT_LIKES_GIVEN_QUERY: &str =
     "UPDATE voicesphere.user_stats SET likes_given = likes_given + 1 WHERE user_id = ?";
 const DECREMENT_LIKES_GIVEN_QUERY: &str =
@@ -32,98 +35,108 @@ pub struct ReactionDB;
 impl ReactionDB {
     pub async fn add_reaction(
         session: &Arc<Session>,
-        reaction_data: ReactionModel,
-    ) -> Result<bool, String> {
+        reaction: ReactionModel,
+    ) -> Result<(), String> {
         log::info!(
             "Adding reaction: user={} -> feed={} (author={})",
-            reaction_data.user_id,
-            reaction_data.feed_id,
-            reaction_data.author_id
+            reaction.user_id, reaction.feed_id, reaction.author_id
         );
 
-        let mut batch: Batch = Default::default();
-        batch.append_statement(INCREMENT_LIKES_QUERY);
-        batch.append_statement(INCREMENT_LIKES_QUERY_GLOBAL_FEEDS);
-        batch.append_statement(INSERT_REACTION_QUERY);
-        batch.append_statement(INCREMENT_LIKES_GIVEN_QUERY);
-        batch.append_statement(INCREMENT_LIKES_RECEIVED_QUERY);
+        // Batch 1 (logged): insert the reaction row (IF NOT EXISTS for idempotency)
+        let mut write_batch: Batch = Default::default();
+        write_batch.append_statement(INSERT_REACTION_QUERY);
+        write_batch.set_consistency(Consistency::One);
 
-        batch.set_consistency(Consistency::One);
-
-        let prepared_batch = session
-            .prepare_batch(&batch)
+        let prepared_write = session
+            .prepare_batch(&write_batch)
             .await
-            .map_err(|e| format!("Failed to prepare batch: {}", e))?;
-        
-        let batch_values = (
-            (reaction_data.feed_id.clone(),),
-            (reaction_data.feed_id.clone(),),
-            (
-                reaction_data.feed_id.clone(),
-                reaction_data.user_id.clone(),
-                reaction_data.reaction_type,
-                reaction_data.reacted_at,
-            ),
-            (reaction_data.user_id.clone(),),      // likes_given for reactor
-            (reaction_data.author_id.clone(),),    // likes_received for feed author
-        );
+            .map_err(|e| format!("Failed to prepare insert batch: {}", e))?;
 
         session
-            .batch(&prepared_batch, batch_values)
+            .batch(&prepared_write, ((
+                reaction.feed_id,
+                reaction.user_id.clone(),
+                reaction.reaction_type,
+                reaction.reacted_at,
+            ),))
             .await
-            .map_err(|e| format!("Error occurred while adding reaction: {}", e))?;
+            .map_err(|e| format!("Failed to insert reaction: {}", e))?;
+
+        // Batch 2 (counter): feed_counts + user_stats
+        let mut counter_batch = Batch::new(BatchType::Counter);
+        counter_batch.append_statement(INCREMENT_REACTION_COUNT_QUERY);
+        counter_batch.append_statement(INCREMENT_LIKES_GIVEN_QUERY);
+        counter_batch.append_statement(INCREMENT_LIKES_RECEIVED_QUERY);
+
+        let prepared_counter = session
+            .prepare_batch(&counter_batch)
+            .await
+            .map_err(|e| format!("Failed to prepare counter batch: {}", e))?;
+
+        session
+            .batch(&prepared_counter, (
+                (reaction.feed_id,),
+                (reaction.user_id.as_str(),),
+                (reaction.author_id.as_str(),),
+            ))
+            .await
+            .map_err(|e| format!("Failed to update counters: {}", e))?;
 
         log::info!(
-            "Reaction added successfully: user={} -> feed={}",
-            reaction_data.user_id,
-            reaction_data.feed_id
+            "Reaction added: user={} -> feed={}",
+            reaction.user_id, reaction.feed_id
         );
-        Ok(true)
+        Ok(())
     }
 
     pub async fn remove_reaction(
         session: &Arc<Session>,
-        reaction_data: ReactionModel,
-    ) -> Result<bool, String> {
+        reaction: ReactionModel,
+    ) -> Result<(), String> {
         log::info!(
             "Removing reaction: user={} -> feed={} (author={})",
-            reaction_data.user_id,
-            reaction_data.feed_id,
-            reaction_data.author_id
+            reaction.user_id, reaction.feed_id, reaction.author_id
         );
 
-        let mut batch: Batch = Default::default();
-        batch.append_statement(DECREMENT_LIKES_QUERY);
-        batch.append_statement(DECREMENT_LIKES_QUERY_GLOBAL_FEEDS);
-        batch.append_statement(DELETE_REACTION_QUERY);
-        batch.append_statement(DECREMENT_LIKES_GIVEN_QUERY);
-        batch.append_statement(DECREMENT_LIKES_RECEIVED_QUERY);
+        // Batch 1 (logged): delete the reaction row
+        let mut write_batch: Batch = Default::default();
+        write_batch.append_statement(DELETE_REACTION_QUERY);
+        write_batch.set_consistency(Consistency::One);
 
-        batch.set_consistency(Consistency::One);
-
-        let prepared_batch = session
-            .prepare_batch(&batch)
+        let prepared_write = session
+            .prepare_batch(&write_batch)
             .await
-            .map_err(|e| format!("Failed to prepare batch: {}", e))?;
-        
-        let batch_values = (
-            (reaction_data.feed_id.clone(),),
-            (reaction_data.feed_id.clone(),),
-            (reaction_data.feed_id.clone(), reaction_data.user_id.clone()),
-            (reaction_data.user_id.clone(),),      // likes_given for reactor
-            (reaction_data.author_id.clone(),),    // likes_received for feed author
-        );
+            .map_err(|e| format!("Failed to prepare delete batch: {}", e))?;
 
         session
-            .batch(&prepared_batch, batch_values)
+            .batch(&prepared_write, ((reaction.feed_id, reaction.user_id.clone()),))
             .await
-            .map_err(|e| format!("Error occurred while removing reaction: {}", e))?;
+            .map_err(|e| format!("Failed to delete reaction: {}", e))?;
+
+        // Batch 2 (counter): feed_counts + user_stats
+        let mut counter_batch = Batch::new(BatchType::Counter);
+        counter_batch.append_statement(DECREMENT_REACTION_COUNT_QUERY);
+        counter_batch.append_statement(DECREMENT_LIKES_GIVEN_QUERY);
+        counter_batch.append_statement(DECREMENT_LIKES_RECEIVED_QUERY);
+
+        let prepared_counter = session
+            .prepare_batch(&counter_batch)
+            .await
+            .map_err(|e| format!("Failed to prepare counter batch: {}", e))?;
+
+        session
+            .batch(&prepared_counter, (
+                (reaction.feed_id,),
+                (reaction.user_id.as_str(),),
+                (reaction.author_id.as_str(),),
+            ))
+            .await
+            .map_err(|e| format!("Failed to update counters: {}", e))?;
 
         log::info!(
-            "Reaction removed successfully: user={} -> feed={}",
-            reaction_data.user_id,
-            reaction_data.feed_id
+            "Reaction removed: user={} -> feed={}",
+            reaction.user_id, reaction.feed_id
         );
-        Ok(true)
+        Ok(())
     }
 }
