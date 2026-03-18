@@ -2,12 +2,15 @@ use std::{ops::ControlFlow, sync::Arc};
 
 use futures_util::TryStreamExt;
 use scylla::{
-    batch::Batch, prepared_statement, statement::Consistency, transport::PagingState, Session,
+    client::session::Session,
+    response::PagingState,
+    statement::{batch::Batch, Consistency},
 };
+use uuid::Uuid;
 
 use crate::handlers::feed::FeedData;
 
-const CREATE_FEED_QUERY: &str = "INSERT INTO voicesphere.feeds (
+const CREATE_FEED_QUERY: &str = "INSERT INTO voicesphere.user_feed (
     feed_id,
     created_at,
     updated_at,
@@ -92,7 +95,8 @@ WHERE author_id = ?
 ORDER BY created_at DESC 
 LIMIT ?";
 
-const DELETE_FEED_QUERY: &str = "DELETE FROM voicesphere.feeds WHERE feed_id = ?"; 
+const DELETE_FEED_QUERY: &str = "DELETE FROM voicesphere.user_feed WHERE feed_id = ?";
+const DELETE_GLOBAL_FEED_QUERY: &str = "DELETE FROM voicesphere.global_feed WHERE feed_id = ?";
 
 pub struct FeedDB;
 
@@ -178,22 +182,28 @@ impl FeedDB {
 
         let mut paging_state = PagingState::start();
 
+        let bucket_id = generate_bucket_id();
+
         let (res, paging_state_response) = session
-            .execute_single_page(&prepared_statement, &[], paging_state)
+            .execute_single_page(&prepared_statement, (bucket_id, 50i32), paging_state)
             .await
             .map_err(|e| format!("error occured {}", e))?;
 
-        println!(
-            "Paging state response from the prepared statement execution: {:#?} ({:?} rows)",
-            paging_state_response,
-            res.rows_num()
-        );
-
         let mut feed_list: Vec<FeedData> = Vec::new();
 
-        for row in res
-            .rows_typed::<FeedData>()
-            .map_err(|e| format!("Failed to deserialize feed data: {}", e))?
+        let rows_res = res
+            .into_rows_result()
+            .map_err(|e| format!("error found in QyeryRowResult {}", e))?;
+
+        println!(
+            "Paging state response from the prepared statement execution: {:#?} ({} rows)",
+            paging_state_response,
+            rows_res.rows_num(),
+        );
+
+        for row in rows_res
+            .rows::<FeedData>()
+            .map_err(|e| format!(" erro occured: {}", e))?
         {
             let feed = row.map_err(|e| format!("Failed to parse feed data: {}", e))?;
             log::info!("Fetched feed: {:?}", feed);
@@ -239,17 +249,21 @@ impl FeedDB {
             .await
             .map_err(|e| format!("Error occurred: {}", e))?;
 
-        log::info!(
-            "Paging state: {:#?} ({:?} rows)",
+       let mut feed_list: Vec<FeedData> = Vec::new();
+
+        let rows_res = res
+            .into_rows_result()
+            .map_err(|e| format!("error found in QyeryRowResult {}", e))?;
+
+        println!(
+            "Paging state response from the prepared statement execution: {:#?} ({} rows)",
             paging_state_response,
-            res.rows_num()
+            rows_res.rows_num(),
         );
 
-        let mut feed_list: Vec<FeedData> = Vec::new();
-
-        for row in res
-            .rows_typed::<FeedData>()
-            .map_err(|e| format!("Failed to deserialize feed data: {}", e))?
+        for row in rows_res
+            .rows::<FeedData>()
+            .map_err(|e| format!(" erro occured: {}", e))?
         {
             let feed = row.map_err(|e| format!("Failed to parse feed data: {}", e))?;
             log::info!("Fetched feed: {:?}", feed);
@@ -259,21 +273,29 @@ impl FeedDB {
         Ok(feed_list)
     }
 
-    pub async fn delete_feed(session: &Arc<Session>, feed_id: &str) -> Result<bool, String> {
-        let prepared_statement = session
-            .prepare(DELETE_FEED_QUERY)
+    pub async fn delete_feed(session: &Arc<Session>, feed_id: Uuid) -> Result<bool, String> {
+        let mut batch: Batch = Default::default();
+        batch.append_statement(DELETE_FEED_QUERY);
+        batch.append_statement(DELETE_GLOBAL_FEED_QUERY);
+
+        batch.set_consistency(Consistency::One);
+
+        let prepared_batch: Batch = session
+            .prepare_batch(&batch)
             .await
-            .map_err(|e| format!("Failed to prepare delete feed query: {}", e))?;
+            .map_err(|e| format!("Error occurred while preparing batch: {}", e))?;
+
+        let batch_values = ((feed_id.clone(),), (feed_id.clone(),));
 
         session
-            .execute_unpaged(&prepared_statement, (feed_id,))
+            .batch(&prepared_batch, batch_values)
             .await
-            .map_err(|e| format!("Failed to execute delete feed query: {}", e))?;
+            .map_err(|e| format!("Error occurred while updating batch: {}", e))?;
+
+        log::info!("Feed deleted successfully in both tables");
 
         Ok(true)
     }
-
-
 }
 
 /// Generate bucket_id for global_feed table

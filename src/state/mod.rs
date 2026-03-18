@@ -1,5 +1,5 @@
 
-use scylla::Session;
+use scylla::client::session::Session;
 use std::sync::Arc; 
 
 //Shared resource state for the application

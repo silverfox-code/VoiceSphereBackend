@@ -1,13 +1,12 @@
 use chrono::{DateTime, Utc};
-use scylla::frame::value::CqlTimestamp;
-use scylla::{FromRow, SerializeRow};
+use scylla::{DeserializeRow, SerializeRow};
 
 // User model
 use serde::{Deserialize, Serialize};
 
 use crate::authenticate::GoogleClaims;
 
-#[derive(SerializeRow, FromRow, Debug, Clone, Serialize, Deserialize)]
+#[derive(SerializeRow, Debug, Clone, Serialize, Deserialize, DeserializeRow)]
 pub struct User {
     // Identity
     pub id: String,

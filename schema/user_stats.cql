@@ -1,5 +1,5 @@
 --- to show prrofile data , add rating slater on
-CREATE TABLE IF NOT EXISTS voicesphere.user_stats{
+CREATE TABLE IF NOT EXISTS voicesphere.user_stats (
     user_id TEXT,
 
     topic_count INT,
@@ -15,4 +15,4 @@ CREATE TABLE IF NOT EXISTS voicesphere.user_stats{
     following_count INT,
 
     PRIMARY KEY (user_id)
-};  
+);

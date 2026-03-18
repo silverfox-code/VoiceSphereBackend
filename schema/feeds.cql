@@ -1,7 +1,5 @@
---- should i keep single table for all feeds?
-
-CREATE TABLE IF NOT EXISTS voicesphere.user_feed{
-    feed_id TIMEUUID,
+CREATE TABLE IF NOT EXISTS voicesphere.user_feed (
+    feed_id UUID,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
     content TEXT,
@@ -20,12 +18,12 @@ CREATE TABLE IF NOT EXISTS voicesphere.user_feed{
     is_active BOOLEAN,
     is_restricted BOOLEAN,
     PRIMARY KEY (author_id, created_at, feed_id)
-} WITH CLUSTERING ORDER BY (created_at DESC);
+) WITH CLUSTERING ORDER BY (created_at DESC);
 
-CREATE TABLE IF NOT EXISTS voicesphere.global_feed{
+CREATE TABLE IF NOT EXISTS voicesphere.global_feed (
     bucket_id TEXT,
 
-    feed_id TIMEUUID,
+    feed_id UUID,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
     content TEXT,
@@ -44,4 +42,4 @@ CREATE TABLE IF NOT EXISTS voicesphere.global_feed{
     is_active BOOLEAN,
     is_restricted BOOLEAN,
     PRIMARY KEY (bucket_id, created_at, feed_id)
-} WITH CLUSTERING ORDER BY (created_at DESC);
+) WITH CLUSTERING ORDER BY (created_at DESC);

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use scylla::{batch::Batch, statement::Consistency, Session};
+use scylla::{ client::session::Session, statement::{Consistency, batch::Batch}};
 
 use crate::models::comment::Comment;
 

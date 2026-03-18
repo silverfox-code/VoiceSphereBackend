@@ -5,6 +5,7 @@ pub mod feed;
 pub mod chat;
 pub mod profile;
 pub mod reactions;
+pub mod comments;
 
 use axum::Router;
 
@@ -14,7 +15,9 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .merge(auth::routes())
         // .merge(user::routes())
-        // .merge(feed::routes())
+        .merge(feed::routes())
         // .merge(chat::routes())
         .merge(profile::routes())
+        .merge(reactions::routes())
+        .merge(comments::routes())
 }

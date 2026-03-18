@@ -1,6 +1,6 @@
 // Database configuration
 use serde::{Deserialize, Serialize};
-use scylla::{Session, SessionBuilder, SessionConfig, transport::session_builder};
+use scylla::client::{session::{self, Session}, session_builder::SessionBuilder};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ impl DatabaseConfig {
 
         // Build SessionConfig properly
         let mut session_builder = SessionBuilder::new();
-        
+
         // Add known nodes using string addresses
         for host in &self.hosts {
             let node_addr = format!("{}:{}", host, self.port);
@@ -43,8 +43,10 @@ impl DatabaseConfig {
             session_builder = session_builder.known_node(&node_addr);
         }
 
-        let session = session_builder.build().await?;
-        
+        let session: Session = session_builder
+        .build()
+        .await?;
+
         // Set keyspace
         session.use_keyspace(&self.keyspace, false).await?;
 

@@ -1,10 +1,6 @@
 // Profile handlers
 use axum::{
-    extract::{Extension, Json, Path},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, put},
-    Router,
+    Router, extract::{Extension, Json, Path}, http::StatusCode, response::IntoResponse, routing::{get, post, put}
 };
 use crate::middleware::auth::UserContext;
 
@@ -57,7 +53,7 @@ where
 {
     Router::new()
         .route("/profile", get(get_my_profile))
-        .route("/profile", put(update_profile))
+        .route("/profile", post(update_profile))
         .route("/profile/:user_id", get(get_profile))
         .route("/profile/:user_id/stats", get(get_user_stats))
 }

@@ -38,13 +38,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let public_routes = Router::new()
         .route("/health", get(health_check))
-        .nest("/api", handlers::auth::routes());
+        .nest("/api", handlers::auth::routes())
+        .nest("/api", handlers::feed::routes())
+        .nest("/api", handlers::comments::routes())
+        .nest("/api", handlers::reactions::routes());
     
     let protected_routes = Router::new()
         .merge(handlers::profile::routes())
         // .merge(handlers::user::routes())
-        // .merge(handlers::feed::routes())
-        // .merge(handlers::chat::routes())
+                // // .merge(handlers::chat::routes())
+        // .merge(handlers::comments::routes())
+        // .merge(handlers::reactions::routes())
         .layer(middleware::from_fn(auth_middleware));
     
     let app = Router::new()

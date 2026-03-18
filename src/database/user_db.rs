@@ -1,6 +1,5 @@
 use chrono;
-// User database operations
-use scylla::{FromRow, IntoTypedRows, Session};
+use scylla::client::session::Session;
 use std::sync::Arc;
 
 use crate::{handlers::user, User};
@@ -94,20 +93,27 @@ impl UserDB {
             .execute_unpaged(&prepared_query, (id,))
             .await
             .map_err(|e| format!("Failed to parse user data: {}", e))?;
+ 
+        let row_result = rows
+            .into_rows_result()     
+            .map_err(|e| format!("Failed to convert rows result: {}", e))?;
 
-        match rows.first_row_typed::<User>() {
-            Ok(user) => {
-                log::debug!("User found: id={}", id);
+        let mut users_rows = row_result.rows::<User>()
+            .map_err(|e| format!("Failed to map rows to User struct: {}", e))?;
+
+        // Get the first element from the iterator without looping
+        match users_rows.next().transpose() {
+            Ok(Some(user)) => {
+                log::debug!("User found: id={}", id);   
                 Ok(Some(user))
             }
+            Ok(None) => {
+                log::warn!("User not found: id={}", id);
+                Ok(None)
+            }
             Err(e) => {
-                if e.to_string().contains("empty") {
-                    log::warn!("User not found: id={}", id);
-                    Ok(None)
-                } else {
-                    log::error!("Failed to deserialize user data: {}", e);
-                    Err(format!("Failed to map user data: {}", e))
-                }
+                log::error!("Failed to deserialize user data: {}", e);
+                Err(format!("Failed to map user data: {}", e))
             }
         }
     }
