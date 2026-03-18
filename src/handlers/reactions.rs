@@ -2,6 +2,7 @@
 use crate::{
     database::reaction_db::ReactionDB,
     middleware::auth::UserContext,
+    models::reaction::ReactionModel,
     state::AppState,
     AppError,
     HttpResponse,
@@ -19,15 +20,6 @@ use uuid::Uuid;
 // ============================================================================
 // Request & Response Structures
 // ============================================================================
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ReactionModel {
-    pub feed_id: Uuid,
-    pub user_id: String,
-    pub author_id: String,
-    pub reaction_type: i32,
-    pub reacted_at: i64,
-}
 
 #[derive(Debug, Deserialize)]
 pub struct AddReactionRequest {

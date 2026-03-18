@@ -1,20 +1,16 @@
-// Feed/Post model
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Feed {
-    pub id: String,
-    pub author_id: String,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FeedData {
+    pub id: Uuid,
+    pub author: String,
     pub author_name: String,
+    pub author_avatar_url: Option<String>,
     pub content: String,
-    pub avatar_url: Option<Vec<String>>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub comments: i32,
-    pub reactions: i32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateFeedRequest {
-    pub content: String,
+    pub like_count: i32,
+    pub comment_count: i32,
+    pub is_liked_by_user: bool,
 }

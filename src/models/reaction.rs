@@ -1,19 +1,10 @@
-// Reaction model
-use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Reaction {
-    pub id: String,
+#[derive(Debug, Clone)]
+pub struct ReactionModel {
+    pub feed_id: Uuid,
     pub user_id: String,
-    pub target_type: String, // "feed" or "comment"
-    pub target_id: String,
-    pub reaction_type: String, // emoji or reaction type
-    pub created_at: i64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AddReactionRequest {
-    pub target_type: String,
-    pub target_id: String,
-    pub reaction_type: String,
+    pub author_id: String,
+    pub reaction_type: i32,
+    pub reacted_at: i64,
 }

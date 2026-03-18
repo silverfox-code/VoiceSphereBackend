@@ -8,7 +8,7 @@ use scylla::{
     },
 };
 
-use crate::handlers::reactions::ReactionModel;
+use crate::models::reaction::ReactionModel;
 
 const INSERT_REACTION_QUERY: &str =
     "INSERT INTO voicesphere.reactions (feed_id, user_id, reaction_type, reacted_at) VALUES (?, ?, ?, ?) IF NOT EXISTS";

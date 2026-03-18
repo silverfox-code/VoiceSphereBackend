@@ -6,7 +6,7 @@ use scylla::{
 };
 use uuid::Uuid;
 
-use crate::handlers::feed::FeedData;
+use crate::models::feed::FeedData;
 
 // ============================================================================
 // DB row types — ScyllaDB derives only, never exposed outside this module

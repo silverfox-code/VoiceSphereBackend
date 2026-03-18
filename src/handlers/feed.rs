@@ -2,6 +2,7 @@
 use crate::{
     database::{feed_db::FeedDB, user_db::UserDB},
     middleware::auth::UserContext,
+    models::feed::FeedData,
     state::AppState,
     AppError,
     AppResponse,
@@ -18,26 +19,12 @@ use chrono::Utc;
 use uuid::Uuid;
 
 // ============================================================================
-// Response & Data Structures
+// Response & Request Structures
 // ============================================================================
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize)]
 pub struct FeedListResponse {
     pub feeds: Vec<FeedData>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct FeedData {
-    pub id: Uuid,
-    pub author: String,
-    pub author_name: String,
-    pub author_avatar_url: Option<String>,
-    pub content: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub like_count: i32,
-    pub comment_count: i32,
-    pub is_liked_by_user: bool,
 }
 
 #[derive(Debug, Deserialize)]
