@@ -1,10 +1,30 @@
 use chrono;
-use scylla::client::session::Session;
+use scylla::{client::session::Session, DeserializeRow};
 use std::sync::Arc;
 
-use crate::{handlers::user, User};
+use crate::{models::user::UserStatsData, User};
 
-// Query constants for production use
+// ============================================================================
+// DB row type for user_stats COUNTER table
+// ============================================================================
+
+#[derive(Debug, DeserializeRow)]
+struct UserStatsRow {
+    pub user_id: String,
+    pub topic_count: i64,
+    pub call_count: i64,
+    pub likes_given: i64,
+    pub likes_received: i64,
+    pub comments_given: i64,
+    pub comments_received: i64,
+    pub followers_count: i64,
+    pub following_count: i64,
+}
+
+// ============================================================================
+// Queries
+// ============================================================================
+
 const CREATE_USER_QUERY: &str = "INSERT INTO voicesphere.users (
     id,
     device_id,
@@ -46,19 +66,24 @@ const GET_USER_QUERY: &str = "SELECT
 FROM voicesphere.users
 WHERE id = ?";
 
+const GET_USER_STATS_QUERY: &str = "SELECT
+    user_id,
+    topic_count, call_count,
+    likes_given, likes_received,
+    comments_given, comments_received,
+    followers_count, following_count
+FROM voicesphere.user_stats
+WHERE user_id = ?";
+
 const UPDATE_LAST_LOGIN_QUERY: &str = "UPDATE voicesphere.users SET last_login_at = ? WHERE id = ?";
 const UPDATE_USERNAME_BIO_QUERY: &str =
-    "UPDATE voicesphere.users SET username = ?, bio = ?, updated_at = now() WHERE id = ?";
+    "UPDATE voicesphere.users SET username = ?, bio = ?, updated_at = toTimestamp(now()) WHERE id = ?";
 const UPDATE_USERNAME_ONLY_QUERY: &str =
-    "UPDATE voicesphere.users SET username = ?, updated_at = now() WHERE id = ?";
-const UPDATE_BIO_ONLY_QUERY: &str =
-    "UPDATE voicesphere.users SET bio = ?, updated_at = now() WHERE id = ?";
+    "UPDATE voicesphere.users SET username = ?, updated_at = toTimestamp(now()) WHERE id = ?";
 const DELETE_USER_QUERY: &str = "DELETE FROM voicesphere.users WHERE id = ?";
 
 pub struct UserDB;
 
-///Note : move prepred statements to a cache for better performance in production
-/// do't use unpage query for SELECT - not a good practice
 impl UserDB {
     pub async fn create_user(session: &Arc<Session>, user: &User) -> Result<bool, String> {
         log::info!("Creating user with id={}", user.id);
@@ -92,7 +117,7 @@ impl UserDB {
         let rows = session
             .execute_unpaged(&prepared_query, (id,))
             .await
-            .map_err(|e| format!("Failed to parse user data: {}", e))?;
+            .map_err(|e| format!("Failed to execute get user query: {}", e))?;
 
         let row_result = rows
             .into_rows_result()
@@ -102,7 +127,6 @@ impl UserDB {
             .rows::<User>()
             .map_err(|e| format!("Failed to map rows to User struct: {}", e))?;
 
-        // Get the first element from the iterator without looping
         match users_rows.next().transpose() {
             Ok(Some(user)) => {
                 log::debug!("User found: id={}", id);
@@ -121,7 +145,47 @@ impl UserDB {
 
     pub async fn user_exists(session: &Arc<Session>, id: &str) -> Result<Option<User>, String> {
         log::info!("Checking if user exists: id={}", id);
-        self::UserDB::get_user(session, id).await
+        Self::get_user(session, id).await
+    }
+
+    pub async fn get_user_stats(
+        session: &Arc<Session>,
+        user_id: &str,
+    ) -> Result<Option<UserStatsData>, String> {
+        let stmt = session
+            .prepare(GET_USER_STATS_QUERY)
+            .await
+            .map_err(|e| format!("Failed to prepare get user stats query: {}", e))?;
+
+        let rows = session
+            .execute_unpaged(&stmt, (user_id,))
+            .await
+            .map_err(|e| format!("Failed to execute get user stats query: {}", e))?;
+
+        let row_result = rows
+            .into_rows_result()
+            .map_err(|e| format!("Failed to convert user stats result: {}", e))?;
+
+        match row_result
+            .rows::<UserStatsRow>()
+            .map_err(|e| format!("Failed to deserialize user stats: {}", e))?
+            .next()
+            .transpose()
+            .map_err(|e| format!("Failed to parse user stats row: {}", e))?
+        {
+            None => Ok(None),
+            Some(row) => Ok(Some(UserStatsData {
+                user_id: row.user_id,
+                topic_count: row.topic_count,
+                call_count: row.call_count,
+                likes_given: row.likes_given,
+                likes_received: row.likes_received,
+                comments_given: row.comments_given,
+                comments_received: row.comments_received,
+                followers_count: row.followers_count,
+                following_count: row.following_count,
+            })),
+        }
     }
 
     pub async fn update_last_login(
@@ -133,46 +197,47 @@ impl UserDB {
         let prepare_query = session
             .prepare(UPDATE_LAST_LOGIN_QUERY)
             .await
-            .map_err(|e| format!("Failed to prepare update last time query: {}", e))?;
+            .map_err(|e| format!("Failed to prepare update last login query: {}", e))?;
 
-        match session
+        session
             .execute_unpaged(&prepare_query, (last_login_at, id))
             .await
-        {
-            Ok(_) => {
-                log::info!("Last login time updated successfully for user id={}", id);
-                Ok(true)
-            }
-            Err(e) => {
-                log::error!(
-                    "Failed to update last login time for user id={}, error={}",
-                    id,
-                    e
-                );
-                Err(format!("Failed to update last login time: {}", e))
-            }
-        }
+            .map_err(|e| format!("Failed to update last login time: {}", e))?;
+
+        log::info!("Last login time updated for user id={}", id);
+        Ok(true)
     }
 
     pub async fn update_user(
         session: &Arc<Session>,
         id: &str,
-        username: Option<&str>,
+        username: &str,
         bio: Option<&str>,
-    ) -> Result<bool, String> {
-        // Validate that at least one field is provided
-        if username.is_none() && bio.is_none() {
-            log::warn!("Update user called with no fields to update: id={}", id);
-            return Ok(false);
+    ) -> Result<(), String> {
+        match bio {
+            Some(b) => {
+                let stmt = session
+                    .prepare(UPDATE_USERNAME_BIO_QUERY)
+                    .await
+                    .map_err(|e| format!("Failed to prepare update user query: {}", e))?;
+                session
+                    .execute_unpaged(&stmt, (username, b, id))
+                    .await
+                    .map_err(|e| format!("Failed to update user: {}", e))?;
+            }
+            None => {
+                let stmt = session
+                    .prepare(UPDATE_USERNAME_ONLY_QUERY)
+                    .await
+                    .map_err(|e| format!("Failed to prepare update user query: {}", e))?;
+                session
+                    .execute_unpaged(&stmt, (username, id))
+                    .await
+                    .map_err(|e| format!("Failed to update user: {}", e))?;
+            }
         }
-
-        // Check if user exists first
-        let user_exists = self::UserDB::user_exists(session, id).await?;
-        if user_exists.is_none() {
-            return Err(format!("User not found: id={}", id));
-        }
-
-        return Ok(true);
+        log::info!("User updated: id={}", id);
+        Ok(())
     }
 
     pub async fn delete_user(session: &Arc<Session>, id: &str) -> Result<bool, String> {
@@ -181,24 +246,12 @@ impl UserDB {
             .await
             .map_err(|e| format!("Failed to prepare delete user query: {}", e))?;
 
-        match session.execute_unpaged(&prepared_query, (id,)).await {
-            Ok(_) => {
-                log::info!("User deleted successfully: id={}", id);
-                Ok(true)
-            }
-            Err(e) => {
-                log::error!("Failed to delete user: id={}, error={}", id, e);
-                Err(format!("Failed to delete user: {}", e))
-            }
-        }
-    }
+        session
+            .execute_unpaged(&prepared_query, (id,))
+            .await
+            .map_err(|e| format!("Failed to delete user: {}", e))?;
 
-    pub async fn search_users(
-        session: &Arc<Session>,
-        _query: &str,
-    ) -> Result<Vec<serde_json::Value>, String> {
-        // TODO: Implement full-text search with secondary indexes or Solr integration
-        log::warn!("Search users not yet implemented");
-        Ok(vec![])
+        log::info!("User deleted: id={}", id);
+        Ok(true)
     }
 }

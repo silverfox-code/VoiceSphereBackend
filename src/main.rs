@@ -1,18 +1,13 @@
 use axum::middleware;
 // Main entry point
-use axum::{
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-    Router,
-};
+use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 
-use voicesphere_backend::middleware::auth_middleware;
-use voicesphere_backend::state::AppState;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use voicesphere_backend::config::{AppConfig, DatabaseConfig};
 use voicesphere_backend::handlers;
+use voicesphere_backend::middleware::auth_middleware;
+use voicesphere_backend::state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -34,19 +29,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Scylla session initialized successfully");
 
     // Create shared application state
-    let state = AppState { db: session, google_client_id: app_config.google_client_id, jwt_secret: app_config.jwt_secret };
+    let state = AppState {
+        db: session,
+        google_client_id: app_config.google_client_id,
+        jwt_secret: app_config.jwt_secret,
+    };
 
     let public_routes = Router::new()
         .route("/health", get(health_check))
         .nest("/api", handlers::auth::routes());
 
     let protected_routes = Router::new()
-        .merge(handlers::profile::routes())
+        .nest("/api", handlers::profile::routes())
         .nest("/api", handlers::feed::routes())
         .nest("/api", handlers::comments::routes())
         .nest("/api", handlers::reactions::routes())
         .layer(middleware::from_fn(auth_middleware));
-    
+
     let app = Router::new()
         .merge(public_routes)
         .nest("/api", protected_routes)
@@ -63,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-        
+
 // Health check endpoint
 pub async fn health_check() -> impl IntoResponse {
     (StatusCode::OK, "OK")

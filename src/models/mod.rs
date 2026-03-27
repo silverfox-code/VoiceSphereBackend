@@ -8,4 +8,4 @@ pub use chat::{ChatMessage, Conversation};
 pub use comment::Comment;
 pub use feed::FeedData;
 pub use reaction::ReactionModel;
-pub use user::User;
+pub use user::{ProfileData, UpdateProfileRequest, User, UserStatsData};

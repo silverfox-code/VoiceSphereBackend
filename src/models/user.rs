@@ -60,16 +60,48 @@ impl User {
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct CreateUserRequest {
+/// Safe public view of a user — no sensitive fields exposed via API.
+#[derive(Debug, Serialize, Clone)]
+pub struct ProfileData {
+    pub id: String,
     pub username: String,
-    pub email: String,
-    pub password: String,
+    pub display_name: String,
+    pub bio: Option<String>,
+    pub avatar_url: Option<String>,
+    pub language: String,
+    pub is_active: bool,
+}
+
+impl From<User> for ProfileData {
+    fn from(u: User) -> Self {
+        Self {
+            id: u.id,
+            username: u.username,
+            display_name: u.display_name,
+            bio: u.bio,
+            avatar_url: u.avatar_url,
+            language: u.language,
+            is_active: u.is_active,
+        }
+    }
+}
+
+/// User activity stats from the user_stats COUNTER table.
+#[derive(Debug, Serialize, Clone)]
+pub struct UserStatsData {
+    pub user_id: String,
+    pub topic_count: i64,
+    pub call_count: i64,
+    pub likes_given: i64,
+    pub likes_received: i64,
+    pub comments_given: i64,
+    pub comments_received: i64,
+    pub followers_count: i64,
+    pub following_count: i64,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct UpdateUserRequest {
-    pub username: Option<String>,
+pub struct UpdateProfileRequest {
+    pub username: String, // always required — username must never be empty
     pub bio: Option<String>,
-    pub profile_picture: Option<String>,
 }
